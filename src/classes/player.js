@@ -7,6 +7,7 @@ import { ctx } from "../store/canvasProperty";
 import { playSound } from "../util/playSound";
 import { generateAnimation } from "../gen/animation";
 import { AnimationMetaData } from "../meta/effect";
+import { spawnThruster } from "../gen/particle";
 const game = document.querySelector(`#game`);
 
 export class PlayerClass extends GameObject {
@@ -23,7 +24,7 @@ export class PlayerClass extends GameObject {
       left: false,
       right: false,
     };
-    this.Onfire = false;
+    this.OnFire = false;
     this.img = player;
     this.exaustImg = exaust;
     this.hp = 10;
@@ -34,6 +35,7 @@ export class PlayerClass extends GameObject {
     this.scalingFactor = 1.2;
     this.buffer = 15;
     this.fireSound = "/audio/weapon/player.mp3";
+    this.trailCooldown = 0;
   }
 
   drawPlayer() {
@@ -59,6 +61,25 @@ export class PlayerClass extends GameObject {
       this.width * this.scalingFactor,
       this.height * this.scalingFactor,
     );
+
+    if (this.resistance > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.strokeStyle = "rgba(255, 0, 0, 0.55)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(
+        this.positionX + 5,
+        this.positionY + this.height / 1.85,
+        (this.width * this.scalingFactor) / 1.6,
+        (this.height * this.scalingFactor) / 1.2,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   movement() {
@@ -114,7 +135,9 @@ export class PlayerClass extends GameObject {
         ),
       );
       this.cooldown = 15;
+      return true;
     }
+    return false;
   }
   dmgTaken() {
     if (this.hp <= 0) {
@@ -148,6 +171,30 @@ export class PlayerClass extends GameObject {
     if (this.cooldown > 0) {
       this.cooldown -= 1;
     }
+    if (this.trailCooldown > 0) {
+      this.trailCooldown -= 1;
+    }
+  }
+  emitThruster() {
+    const moving =
+      this.movementParameter.up ||
+      this.movementParameter.down ||
+      this.movementParameter.left ||
+      this.movementParameter.right;
+    if ((!moving && !this.OnFire) || (this.OnFire && !moving)) return;
+    if (this.trailCooldown > 0) return;
+    const intensity = moving ? 1 : 0.7;
+    spawnThruster(
+      this.positionX,
+      this.positionY + this.height * this.scalingFactor,
+      intensity,
+    );
+    spawnThruster(
+      this.positionX + 8,
+      this.positionY + this.height * this.scalingFactor,
+      intensity,
+    );
+    this.trailCooldown = 2;
   }
   update() {
     this.movement();

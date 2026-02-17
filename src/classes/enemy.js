@@ -1,11 +1,11 @@
-import { GameObject } from './object';
-import { distanceBetween } from '../util/distance';
-import { LaserClass } from './laser';
-import { PlayerCoordinates } from '../store/globalStore';
-import { generateAnimation } from '../gen/animation';
-import { ctx } from '../store/canvasProperty';
-import { playSound } from '../util/playSound';
-import { AnimationMetaData } from '../meta/effect';
+import { GameObject } from "./object";
+import { distanceBetween } from "../util/distance";
+import { LaserClass } from "./laser";
+import { PlayerCoordinates } from "../store/globalStore";
+import { generateAnimation } from "../gen/animation";
+import { ctx } from "../store/canvasProperty";
+import { playSound } from "../util/playSound";
+import { AnimationMetaData } from "../meta/effect";
 
 const noiseFactor = 50;
 
@@ -15,7 +15,7 @@ export class EnemyClass extends GameObject {
     this.velocity = { dx: 4.5, dy: 4 };
     this.verticalOffset = this.canvasHeight;
     this.positionY = positionY - this.verticalOffset;
-    this.type = 'enemy';
+    this.type = "enemy";
     this.originalPositionY = positionY + 100;
     this.originalPositionX = positionX;
     this.condition = false;
@@ -43,7 +43,7 @@ export class EnemyClass extends GameObject {
       this.positionX - this.width / 2,
       this.positionY,
       this.width * this.scalingFactor,
-      this.height * this.scalingFactor
+      this.height * this.scalingFactor,
     );
   }
 
@@ -58,9 +58,15 @@ export class EnemyClass extends GameObject {
     } else {
       this.positionY += this.velocity.dy;
       this.positionX += this.velocity.dx;
-      if (this.positionX + this.width / 2 >= this.canvasWidth || this.positionX <= this.width / 2) {
+      if (
+        this.positionX + this.width / 2 >= this.canvasWidth ||
+        this.positionX <= this.width / 2
+      ) {
         this.velocity.dx = -this.velocity.dx;
-      } else if (this.positionY + this.height >= this.canvasHeight || this.positionY <= 0) {
+      } else if (
+        this.positionY + this.height >= this.canvasHeight ||
+        this.positionY <= 0
+      ) {
         this.velocity.dy = -this.velocity.dy;
       }
     }
@@ -68,9 +74,12 @@ export class EnemyClass extends GameObject {
 
   fire(ObjectArray) {
     if (
-      Math.floor((Math.random() * this.MetaData.weapon.fireRate) / this.MetaData.bossFactor) === 0 &&
+      Math.floor(
+        (Math.random() * this.MetaData.weapon.fireRate) /
+          this.MetaData.bossFactor,
+      ) === 0 &&
       this.condition &&
-      this.MetaData.weapon.Kind !== 'empty' &&
+      this.MetaData.weapon.Kind !== "empty" &&
       this.canfire()
     ) {
       playSound(this.MetaData.weaponSound, 0.3);
@@ -80,28 +89,40 @@ export class EnemyClass extends GameObject {
           this.positionY + this.height / 2,
           this.type,
           this.MetaData.weapon,
-          this.locatePlayer()
-        )
+          this.locatePlayer(),
+        ),
       );
       this.cooldown = 10;
     }
   }
 
   deadEffect() {
+    if (this.dead) return false;
     if (this.hp <= 0) {
       this.dead = true;
       playSound(this.MetaData.hitSound, 0.9);
-      generateAnimation(this.positionX, this.positionY, this.MetaData.blastAnimation);
+      generateAnimation(
+        this.positionX,
+        this.positionY,
+        this.MetaData.blastAnimation,
+      );
+      return true;
     } else {
       this.hp--;
-      playSound('/audio/hitSound/lowDamage.mp3', 1);
-      generateAnimation(this.positionX, this.positionY + this.height, AnimationMetaData.smallExplosion);
+      playSound("/audio/hitSound/lowDamage.mp3", 1);
+      generateAnimation(
+        this.positionX,
+        this.positionY + this.height,
+        AnimationMetaData.smallExplosion,
+      );
+      return false;
     }
   }
 
   locatePlayer() {
     let Player = PlayerCoordinates();
-    const addNoise = (value) => value + (Math.random() - 0.5) * (noiseFactor / 100);
+    const addNoise = (value) =>
+      value + (Math.random() - 0.5) * (noiseFactor / 100);
     let component = { x: 0, y: 0 };
 
     let diffY = Player.Y - this.positionY;

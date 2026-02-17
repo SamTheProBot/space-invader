@@ -23,6 +23,8 @@ import { playSound } from "./src/util/playSound";
 import { generateAlianNoise } from "./src/gen/randomSound";
 import { generateAnimation } from "./src/gen/animation";
 import { AnimationMetaData } from "./src/meta/effect";
+import { createFx } from "./src/util/fx";
+import { spawnExplosion, spawnSparks } from "./src/gen/particle";
 
 export let onWindowLoad = false;
 
@@ -34,10 +36,30 @@ let GameStarted = false;
 let GameWon = false;
 let engageMovementAlgo = false;
 let playerSpirit;
+const fx = createFx();
 const div = document.querySelector(`#hit`);
 const wave = document.querySelector(`#wave`);
 const game = document.querySelector(`#game`);
 const rule = document.querySelector(`#countrols`);
+const scoreEl = document.querySelector(`#score`);
+const comboEl = document.querySelector(`#combo`);
+let score = 0;
+let combo = 0;
+let lastKillTime = 0;
+const comboWindow = 1800;
+let bannerTimeout;
+
+const showBanner = (text, duration = 1200) => {
+  if (!GameStarted) return;
+  game.innerHTML = text;
+  game.style.opacity = "1";
+  clearTimeout(bannerTimeout);
+  bannerTimeout = setTimeout(() => {
+    if (GameStarted && playerSpirit && !playerSpirit.dead) {
+      game.innerHTML = ``;
+    }
+  }, duration);
+};
 
 function generatePlayer() {
   playerSpirit = new PlayerClass(
@@ -52,12 +74,20 @@ function updateGame() {
   let Animation = ReadArray().filter((obj) => obj.type === `animation`);
   let Laser = ReadArray().filter((obj) => obj.type === `laser`);
   let Enemy = ReadArray().filter((obj) => obj.type === `enemy`);
+  let Particles = ReadArray().filter((obj) => obj.type === `particle`);
   let playerLaser = Laser.filter((item) => item.owner === "player");
   let enemyLaser = Laser.filter((item) => item.owner === "enemy");
-  if (playerSpirit.canfire() && playerSpirit.OnFire)
+  if (playerSpirit.canfire() && playerSpirit.OnFire) {
     playerSpirit.fire(ReadArray());
+  }
+  Particles.forEach((obj) => {
+    obj.drawParticle();
+    obj.movement();
+  });
+
   Player.forEach((obj) => {
     obj.drawPlayer();
+    obj.emitThruster();
     obj.update();
   });
 
@@ -133,6 +163,8 @@ function updateGame() {
   WriteArray(ReadArray().filter((obj) => !obj.dead));
   div.innerHTML = `Health Remaning : ${playerSpirit.hp}`;
   wave.innerHTML = `Wave Number: ${CurrentLevel()}`;
+  if (scoreEl) scoreEl.innerHTML = `Score: ${score}`;
+  if (comboEl) comboEl.innerHTML = combo > 1 ? `Combo x${combo}` : ``;
 }
 
 const EventListener = () => {
@@ -154,12 +186,13 @@ const EventListener = () => {
   });
   eventEmmiter.on(EventMaping.SPACE_KEY, (_, onFire) => {
     playerSpirit.OnFire = onFire;
-    console.log(onFire);
   });
   eventEmmiter.on(EventMaping.COLLISON_LASER, (_, { playerLsr, enemyLsr }) => {
     playerLsr.dead = true;
     enemyLsr.dead = true;
     playSound("/audio/hitSound/lasercollision.mp3");
+    fx.triggerShake(8, 130);
+    spawnSparks(enemyLsr.positionX, enemyLsr.positionY, "red", 10);
     generateAnimation(
       enemyLsr.positionX,
       enemyLsr.positionY,
@@ -169,14 +202,40 @@ const EventListener = () => {
   eventEmmiter.on(EventMaping.COLLISON_PLAYER, (_, obj) => {
     playerSpirit.dmgTaken();
     obj.deadEffect();
+    fx.triggerShake(11, 260);
+    combo = 0;
+    spawnSparks(playerSpirit.positionX, playerSpirit.positionY, "red", 12);
   });
   eventEmmiter.on(EventMaping.COLLISON_ENEMY, (_, { obj, lsr }) => {
     lsr.dead = true;
-    obj.deadEffect();
+    const killed = obj.deadEffect();
+    if (killed) {
+      const palette =
+        obj.MetaData.blastAnimation === AnimationMetaData.mediumGreenExplosion
+          ? "green"
+          : "orange";
+      const scale = obj.MetaData.width >= 90 ? 1.6 : 1;
+      spawnExplosion(obj.positionX, obj.positionY, palette, scale);
+      const now = performance.now();
+      combo = now - lastKillTime < comboWindow ? combo + 1 : 1;
+      lastKillTime = now;
+      const base = Math.round(
+        80 + obj.MetaData.width * 0.6 + obj.MetaData.hp * 12,
+      );
+      const mult = 1 + Math.min(5, combo - 1) * 0.2;
+      score += Math.round(base * mult);
+      fx.triggerShake(scale > 1.2 ? 16 : 10, scale > 1.2 ? 350 : 250);
+    } else {
+      fx.triggerShake(8, 160);
+      spawnSparks(obj.positionX, obj.positionY + obj.height / 2, "blue", 6);
+    }
   });
   eventEmmiter.on(EventMaping.HIT_LASER, (_, lsr) => {
     playerSpirit.dmgTaken();
     lsr.dead = true;
+    fx.triggerShake(9, 230);
+    combo = 0;
+    spawnSparks(playerSpirit.positionX, playerSpirit.positionY, "red", 10);
     generateAnimation(
       lsr.positionX,
       lsr.positionY + 20,
@@ -189,6 +248,7 @@ const EventListener = () => {
       generateEnemy(data);
       IncreaseLevel();
       GameWon = true;
+      showBanner(`Wave ${CurrentLevel()}`);
     } else {
       if (GameWon) {
         game.innerHTML = `Mission Completed!`;
@@ -221,7 +281,10 @@ const animation = (currentTime) => {
   if (changeTime > interval) {
     lastTime = currentTime - (changeTime % interval);
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    fx.beginFrame(ctx, currentTime, canvasWidth, canvasHeight);
+    fx.drawBackground(ctx, canvasWidth, canvasHeight);
     updateGame();
+    fx.endFrame(ctx, currentTime, canvasWidth, canvasHeight);
   }
   requestAnimationFrame(animation);
 };
